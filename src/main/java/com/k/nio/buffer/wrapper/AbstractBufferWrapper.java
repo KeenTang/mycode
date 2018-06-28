@@ -6,97 +6,107 @@ import java.nio.Buffer;
  * @author keen on 2018/6/12.
  */
 public abstract class AbstractBufferWrapper {
-    private final static int DEFAULT_CAPACITY = 256;
+    private final static int DEFAULT_CAPACITY = 2 << 7;
+    private final static int THRESHOLD = 1024 * 1024 * 4;
     private int capacity;
-    private int mark;
-    private int position;
-    private int limit;
+    private int markReadIndex;
+    private int markWriteIndex;
     private int readIndex;
     private int writeIndex;
-    protected Buffer buffer;
 
     AbstractBufferWrapper() {
         this(DEFAULT_CAPACITY);
     }
 
     AbstractBufferWrapper(int capacity) {
-        this(capacity,0,0,0,0,0);
+        this(capacity, 0, 0);
     }
 
-    AbstractBufferWrapper(int capacity, int limit, int position, int readIndex, int writeIndex, int mark) {
-        if(capacity<0){
-            throw new IllegalArgumentException("capacity不能小于0,capacity="+capacity);
+    AbstractBufferWrapper(int capacity, int readIndex, int writeIndex) {
+        if (capacity < 0) {
+            throw new IllegalArgumentException("capacity不能小于0,capacity=" + capacity);
         }
-        if(capacity>Integer.MAX_VALUE){
-            throw new IllegalArgumentException("capacity不能大于"+Integer.MAX_VALUE+",capacity="+capacity);
+        if (capacity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("capacity不能大于" + Integer.MAX_VALUE + ",capacity=" + capacity);
         }
-        this.capacity = capacity;
-        this.limit(limit);
-        this.position(position);
+        this.capacity = capacity == 0 ? DEFAULT_CAPACITY : capacity;
         this.readIndex(readIndex);
         this.writeIndex(writeIndex);
-        if(mark>=0){
-            if(mark>writeIndex){
-                throw new IllegalArgumentException();
-            }
-            this.mark=mark;
-        }
-
     }
 
     public final int capacity() {
         return capacity;
     }
 
-    public final int limit(){
-        return this.limit;
-    }
 
-    public final AbstractBufferWrapper limit(int limit){
-        if(limit<0||limit>capacity){
-            throw new IllegalArgumentException();
-        }
-        this.limit=limit;
-        return this;
-    }
-
-    public final int position(){
-        return this.position;
-    }
-
-    public final AbstractBufferWrapper position(int position){
-        if(position<0||position>limit){
-            throw new IllegalArgumentException();
-        }
-        this.position=position;
-        return this;
-    }
-
-    public final int readIndex(){
+    public final int readIndex() {
         return this.readIndex;
     }
 
 
-    public final AbstractBufferWrapper readIndex(int readIndex){
-        if(readIndex<0||readIndex>writeIndex){
+    final AbstractBufferWrapper readIndex(int readIndex) {
+        if (readIndex < 0 || readIndex > writeIndex) {
             throw new IllegalArgumentException();
         }
-        this.readIndex=readIndex;
+        this.readIndex = readIndex;
         return this;
     }
 
-    public final int writeIndex(){
+    public final int writeIndex() {
         return this.writeIndex;
     }
 
-    public final AbstractBufferWrapper writeIndex(int writeIndex){
-        if(writeIndex<0||writeIndex>limit){
+    final AbstractBufferWrapper writeIndex(int writeIndex) {
+        if (writeIndex < 0 || writeIndex > capacity) {
             throw new IllegalArgumentException();
         }
-        this.writeIndex=writeIndex;
+        this.writeIndex = writeIndex;
         return this;
     }
 
+    public final AbstractBufferWrapper readMark() {
+        this.markReadIndex = this.readIndex;
+        return this;
+    }
 
+    public final AbstractBufferWrapper writeMark() {
+        this.markWriteIndex = this.writeIndex;
+        return this;
+    }
+
+    final void ensureCapacity(int minCapacity) {
+        if (this.capacity < minCapacity) {
+            this.rebuildBuffer(minCapacity);
+        }
+    }
+
+    public final AbstractBufferWrapper clear() {
+        this.writeIndex = readIndex = 0;
+        this.discardReadMark();
+        this.discardWriteMark();
+        return this;
+    }
+
+    public final AbstractBufferWrapper discardReadMark() {
+        this.markReadIndex = 0;
+        return this;
+    }
+
+    public final AbstractBufferWrapper discardWriteMark() {
+        this.markWriteIndex = 0;
+        return this;
+    }
+
+    final void calculateNewCapacity(int minCapacity){
+        if(minCapacity<THRESHOLD){
+            this.capacity= minCapacity<<1;
+        }
+        if(minCapacity==THRESHOLD){
+            this.capacity= minCapacity;
+        }
+        this.capacity=Math.max(minCapacity,(int)(minCapacity*0.2)+minCapacity);
+    }
+
+    abstract void rebuildBuffer(int minCapcity);
 
 }
