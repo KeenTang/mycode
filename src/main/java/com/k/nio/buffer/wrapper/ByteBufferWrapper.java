@@ -24,49 +24,67 @@ public class ByteBufferWrapper extends AbstractBufferWrapper {
         calculateNewCapacity(minCapacity);
         ByteBuffer oldByteBuffer = this.byteBuffer;
         byteBuffer = oldByteBuffer.isDirect() ? ByteBuffer.allocateDirect(this.capacity()) : ByteBuffer.allocate(this.capacity());
-        System.arraycopy(oldByteBuffer.array(),0,byteBuffer.array(),0,this.writeIndex());
+        System.arraycopy(oldByteBuffer.array(), 0, byteBuffer.array(), 0, this.writeIndex());
         this.disable(oldByteBuffer);
     }
 
-    public AbstractBufferWrapper put(ByteBuffer byteBuffer){
+    public AbstractBufferWrapper put(ByteBuffer src) {
+        return this.put(src, 0, src.remaining());
+    }
+
+    public AbstractBufferWrapper put(ByteBuffer src, int offset, int length) {
+        checkBounds(offset,length,src.remaining());
+        this.ensureCapacity(this.writeIndex() + length);
+        System.arraycopy(src.array(), offset, this.byteBuffer.array(), this.writeIndex(), length);
+        this.writeIndex(this.writeIndex() + length);
         return this;
+    }
+
+
+    public AbstractBufferWrapper put(byte[] src) {
+        return this.put(src, 0, src.length);
     }
 
     public AbstractBufferWrapper put(byte val) {
+        return this.put(this.writeIndex(),val);
+    }
+
+    public AbstractBufferWrapper put(int index,byte val) {
         this.ensureCapacity(this.writeIndex() + 1);
         byteBuffer.put(val);
+        this.writeIndex(this.writeIndex() + 1);
         return this;
     }
 
-    public AbstractBufferWrapper put(byte[] src) {
-        this.ensureCapacity(this.writeIndex()+src.length);
-        return this.put(src,0,src.length);
+    public AbstractBufferWrapper putInt(int val){
+        this.ensureCapacity(this.writeIndex()+4);
+        this.byteBuffer.putInt(val);
+        return this;
     }
 
     public AbstractBufferWrapper put(byte[] src, int offset, int length) {
-        byteBuffer.put(src,offset,length);
+        checkBounds(offset,length,src.length);
+        this.ensureCapacity(this.writeIndex() + src.length);
+        byteBuffer.put(src, offset, length);
+        this.writeIndex(this.writeIndex()+length);
         return this;
     }
 
     public byte get() {
-       return get(this.readIndex());
+        return get(this.readIndex());
     }
 
     public byte get(int index) {
-        if(index<0||index>this.writeIndex()){
-            throw new IndexOutOfBoundsException();
-        }
-        byte b=this.byteBuffer.array()[index];
-        this.readIndex(this.readIndex()+1);
-        return b;
+        this.readIndex(index + 1);
+        return this.byteBuffer.array()[index];
     }
 
-    private void disable(ByteBuffer byteBuffer){
-        if(byteBuffer!=null){
-            if(byteBuffer.isDirect()){
-                ((DirectBuffer)byteBuffer).cleaner().clean();
+    private void disable(ByteBuffer byteBuffer) {
+        if (byteBuffer != null) {
+            if (byteBuffer.isDirect()) {
+                ((DirectBuffer) byteBuffer).cleaner().clean();
             }
-            byteBuffer=null;
+            byteBuffer = null;
         }
     }
 }
