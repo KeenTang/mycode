@@ -1,5 +1,7 @@
 package com.k.nio.buffer.wrapper;
 
+import java.lang.reflect.Constructor;
+
 /**
  * Created with IntelliJ IDEA.
  * Description:
@@ -7,7 +9,7 @@ package com.k.nio.buffer.wrapper;
  * Date: 2018-07-01
  * Time: 21:22
  */
-public final  class ByteUtil {
+public final  class ByteBufferWrapperUtil {
     public static int makeInt(byte b3,byte b2,byte b1,byte b0){
         return (((b3       ) << 24) |
                 ((b2 & 0xff) << 16) |
@@ -33,6 +35,26 @@ public final  class ByteUtil {
                 (((long)b2 & 0xff) << 16) |
                 (((long)b1 & 0xff) <<  8) |
                 (((long)b0 & 0xff)      ));
+    }
+
+    public static<T> T createObject(Class<T> cls,Class[] constructorArgTypes,Object[]initargs){
+        try {
+            Constructor<T> constructor = cls.getDeclaredConstructor(constructorArgTypes);
+            if(!constructor.isAccessible()){
+                constructor.setAccessible(true);
+            }
+            return constructor.newInstance(initargs);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static<T> T createObject(String clsName,Class[] constructorArgTypes,Object[]initargs){
+        try {
+            return (T)createObject(Class.forName(clsName),constructorArgTypes,initargs);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

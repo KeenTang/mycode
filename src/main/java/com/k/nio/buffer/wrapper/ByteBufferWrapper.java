@@ -2,13 +2,18 @@ package com.k.nio.buffer.wrapper;
 
 import sun.nio.ch.DirectBuffer;
 
+import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.CharBuffer;
+import java.nio.IntBuffer;
+import java.util.Arrays;
 
 /**
  * @author keen on 2018/6/12.
  */
 public class ByteBufferWrapper {
+
     private final static int DEFAULT_CAPACITY = 2 << 7;
     private final static int MAX_CAPACITY = Integer.MAX_VALUE;
     private final static int THRESHOLD = 1024 * 1024 * 4;
@@ -17,7 +22,6 @@ public class ByteBufferWrapper {
     private int markWriteIndex;
     private int readIndex;
     private int writeIndex;
-    //private boolean bigEndian;
     private ByteBuffer byteBuffer;
 
     public ByteBufferWrapper(boolean isDirect) {
@@ -193,13 +197,32 @@ public class ByteBufferWrapper {
         return b;
     }
 
+    public byte[] getBytes(byte[] dest, int offset, int length) {
+        checkBounds(offset, length, this.remaining());
+        System.arraycopy(this.byteBuffer.array(), this.readIndex + offset, dest, 0, length);
+        return dest;
+    }
+
+    public CharBuffer asCharBuffer() {
+        String clsName = "java.nio.ByteBufferAsCharBufferB";
+        if (!isBigEndian()) {
+            clsName = "java.nio.ByteBufferAsCharBufferL";
+        }
+        return (CharBuffer) ByteBufferWrapperUtil.createObject(clsName, new Class[]{ByteBuffer.class},
+                new Object[]{this.getByteBuffer()});
+    }
+
+    public IntBuffer asIntBuffer() {
+        return this.byteBuffer.asIntBuffer();
+    }
+
     public short getShort() {
         this.checkIndex(this.readIndex, 2);
         short s;
         if (this.isBigEndian()) {
-            s = ByteUtil.makeShort(this.byteBuffer.array()[this.readIndex], this.byteBuffer.array()[this.readIndex + 1]);
+            s = ByteBufferWrapperUtil.makeShort(this.byteBuffer.array()[this.readIndex], this.byteBuffer.array()[this.readIndex + 1]);
         } else {
-            s = ByteUtil.makeShort(this.byteBuffer.array()[this.readIndex + 1], this.byteBuffer.array()[this.readIndex]);
+            s = ByteBufferWrapperUtil.makeShort(this.byteBuffer.array()[this.readIndex + 1], this.byteBuffer.array()[this.readIndex]);
         }
         this.readIndex += 2;
         return s;
@@ -209,9 +232,9 @@ public class ByteBufferWrapper {
         this.checkIndex(this.readIndex, 2);
         char c;
         if (this.isBigEndian()) {
-            c = ByteUtil.makeChar(this.byteBuffer.array()[this.readIndex], this.byteBuffer.array()[this.readIndex + 1]);
+            c = ByteBufferWrapperUtil.makeChar(this.byteBuffer.array()[this.readIndex], this.byteBuffer.array()[this.readIndex + 1]);
         } else {
-            c = ByteUtil.makeChar(this.byteBuffer.array()[this.readIndex + 1], this.byteBuffer.array()[this.readIndex]);
+            c = ByteBufferWrapperUtil.makeChar(this.byteBuffer.array()[this.readIndex + 1], this.byteBuffer.array()[this.readIndex]);
         }
         this.readIndex += 2;
         return c;
@@ -222,9 +245,9 @@ public class ByteBufferWrapper {
         byte[] array = this.byteBuffer.array();
         int i;
         if (this.isBigEndian()) {
-            i = ByteUtil.makeInt(array[this.readIndex], array[this.readIndex + 1], array[this.readIndex + 2], array[this.readIndex + 3]);
+            i = ByteBufferWrapperUtil.makeInt(array[this.readIndex], array[this.readIndex + 1], array[this.readIndex + 2], array[this.readIndex + 3]);
         } else {
-            i = ByteUtil.makeInt(array[this.readIndex + 3], array[this.readIndex + 2], array[this.readIndex + 1], array[this.readIndex]);
+            i = ByteBufferWrapperUtil.makeInt(array[this.readIndex + 3], array[this.readIndex + 2], array[this.readIndex + 1], array[this.readIndex]);
         }
 
         this.readIndex += 4;
@@ -236,10 +259,10 @@ public class ByteBufferWrapper {
         byte[] array = this.byteBuffer.array();
         long l;
         if (this.isBigEndian()) {
-            l = ByteUtil.makeLong(array[this.readIndex], array[this.readIndex + 1], array[this.readIndex + 2], array[this.readIndex + 3],
+            l = ByteBufferWrapperUtil.makeLong(array[this.readIndex], array[this.readIndex + 1], array[this.readIndex + 2], array[this.readIndex + 3],
                     array[this.readIndex + 4], array[this.readIndex + 5], array[this.readIndex + 6], array[this.readIndex + 7]);
         } else {
-            l = ByteUtil.makeLong(array[this.readIndex + 7], array[this.readIndex + 6], array[this.readIndex + 5], array[this.readIndex + 4],
+            l = ByteBufferWrapperUtil.makeLong(array[this.readIndex + 7], array[this.readIndex + 6], array[this.readIndex + 5], array[this.readIndex + 4],
                     array[this.readIndex + 3], array[this.readIndex + 2], array[this.readIndex + 1], array[this.readIndex]);
         }
 
@@ -253,6 +276,14 @@ public class ByteBufferWrapper {
 
     public double getDouble() {
         return Double.longBitsToDouble(this.getLong());
+    }
+
+    public ByteBuffer getByteBuffer() {
+        int capacity = this.writeIndex - this.readIndex;
+        ByteBuffer buffer = ByteBuffer.wrap(Arrays.copyOfRange(this.byteBuffer.array(), this.readIndex, this.writeIndex));
+        //ByteBuffer buffer=this.isDirect()?ByteBuffer.allocateDirect(capacity): ByteBuffer.allocate(capacity);
+        // buffer.
+        return buffer;
     }
 
     public int remaining() {
@@ -294,6 +325,49 @@ public class ByteBufferWrapper {
         this.discardMark();
         return this;
     }
+
+    public int findFirst(byte b) {
+        for (int i = this.readIndex; i < this.writeIndex; i++) {
+            if (this.byteBuffer.array()[i] == b) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public int findLast(byte b) {
+        for (int i = this.writeIndex - 1; i > this.readIndex; i++) {
+            if (this.byteBuffer.array()[i] == b) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public ByteBufferWrapper skip(int length) {
+        if (length < 0 || length > this.remaining()) {
+            throw new IndexOutOfBoundsException();
+        }
+        this.readIndex += length;
+        return this;
+    }
+
+    public ByteBufferWrapper resetReadIndex(int readIndex) {
+        if (readIndex < 0 || readIndex > this.writeIndex) {
+            throw new IndexOutOfBoundsException();
+        }
+        this.readIndex = readIndex;
+        return this;
+    }
+
+    public ByteBufferWrapper resetWriteIndex(int writeIndex) {
+        if (writeIndex < this.readIndex || this.writeIndex > this.capacity) {
+            throw new IndexOutOfBoundsException();
+        }
+        this.writeIndex = writeIndex;
+        return this;
+    }
+
 
     private void checkIndex(int index, int length) {
         checkBounds(index, length, this.writeIndex);
